@@ -116,6 +116,17 @@ class KnowledgeBase(object):
             print("Invalid ask:", fact.statement)
             return []
 
+    # helper method for kb_retract that never worked!
+    def prune(self):
+        for f in self.facts:
+            if not f.supported_by:
+                self.facts.remove(f)
+
+        for r in self.rules:
+            if not r.supported_by:
+                if not r.asserted:
+                    self.rules.remove(r)
+
     def kb_retract(self, fact):
         """Retract a fact from the KB
 
@@ -127,10 +138,20 @@ class KnowledgeBase(object):
         """
         printv("Retracting {!r}", 0, verbose, [fact])
         ####################################################
-        # Student code goes here
-        
+        # I can't figure this one out! I tried so many different iterations
+        # and they all seemed like they were working but I just ran out of time :(
+
+
 
 class InferenceEngine(object):
+    def inferRuleLHSHelper(self, r, bnd):
+        l = [] # create a place holder lhs array
+        for i in range(len(r.lhs)): # use a for loop to go through every LHS
+            l_add = instantiate(r.lhs[i],bnd) # create the instantiated statement from rule LHS's and the matched bindings
+            l.append(l_add) # add the created instantiated statement into the LHS of the new inferred rule
+
+        return l # return lhs array with everything (including first lhs)
+
     def fc_infer(self, fact, rule, kb):
         """Forward-chaining to infer new facts and rules
 
@@ -140,9 +161,38 @@ class InferenceEngine(object):
             kb (KnowledgeBase) - A KnowledgeBase
 
         Returns:
-            Nothing            
+            Nothing
         """
         printv('Attempting to infer from {!r} and {!r} => {!r}', 1, verbose,
             [fact.statement, rule.lhs, rule.rhs])
         ####################################################
-        # Student code goes here
+        ruleLHSFirst = rule.lhs[0] # get the first element of the LHS of rule to match with
+        f_s = fact.statement # get the statement of the fact given to match with
+        ruleLHSLen = len(rule.lhs) # get the length of how many LHS are in rule
+        bnd_betweenfr = match(ruleLHSFirst, f_s) # find all bindings between rule's first LHS and fact
+
+        if not bnd_betweenfr: # if empty match
+            return #end inference engine, there's nothing to infer
+        else: # if not empty match
+            s_add = instantiate(rule.rhs, bnd_betweenfr) # create either the statement to make a fact or the RHS of a rule
+            if ruleLHSLen > 1: # if there is more than one LHS in rule, then we are inferring a new rule!
+                r_add = Rule([[],s_add], [[fact,rule]]) # create a new inferred rule with RHS being the statement of the RHS of rule through instantiate
+
+                r_add.lhs = self.inferRuleLHSHelper(rule, bnd_betweenfr) # get all of lhs run with instantiate
+
+                r_add.lhs.remove(instantiate(ruleLHSFirst,bnd_betweenfr)) # remove the first LHS that was used already to infer this new rule
+
+                fact.supports_rules.append(r_add) # say that fact supports this new inferred rule
+                rule.supports_rules.append(r_add) # say that rule supports this new inferred rule
+
+                kb.kb_add(r_add) # add the new inferred rule onto the kb
+
+            else: # if there is only 1 LHS in rule, then we are inferring a fact since there are no more factors
+                f_add = Fact(s_add, [[fact,rule]]) # create fact with statement to add from RHS from rule
+                #f_add.supported_by.append(fact) # say this new fact is supported by fact
+                #f_add.supported_by.append(rule) # say this new fact is supported by rule
+
+                fact.supports_facts.append(f_add) # say that fact now supports this new fact
+                rule.supports_facts.append(f_add) # say that rule now supports this new fact
+
+                kb.kb_add(f_add) # add the new inferred fact onto the kb
